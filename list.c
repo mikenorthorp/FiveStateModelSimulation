@@ -33,7 +33,7 @@ void
 List_destroy( List_t *list )
 {
     List_node_t *temp = NULL;
-
+    List_node_t *data = NULL;
     /* Free up all the nodes that currently exist in the list then reset
        the list information as if the list was just initialized. */
 
@@ -41,8 +41,10 @@ List_destroy( List_t *list )
     {
         while (list->head != NULL)
         {
+            data = list->head->data;
             temp = list->head;
             list->head = list->head->next;
+            free( data );
             free( temp );
         }
         list->head = NULL;
