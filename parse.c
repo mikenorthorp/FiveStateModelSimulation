@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +7,29 @@
 
 #define BUF_MAX  (81)
 #define NAME_MAX (21)
+
+/* This reads in the timer for the unit of time from
+   the config.txt file */
+int
+readConfigTimer() {
+  FILE *inFile;
+  int unitOfTime = 0;
+
+  // Open file
+  inFile = fopen("config.txt", "r");
+
+   // Check that file exits
+  if(inFile == NULL) {
+    printf("Error: File not found\n");
+    return unitOfTime;
+  }
+
+  // Scan in the unit of time in the format timer=[num]
+  fscanf(inFile, "timer=%d", &unitOfTime);
+  printf("The timer is %d", unitOfTime);
+
+  return unitOfTime;
+}
 
 /* Define the struct for the PCB
    Takes in name, lifetime and running time */
@@ -28,16 +50,15 @@ main( int argc, char **argv )
   char   name[BUF_MAX];
   int    lifetime;
   int    runningTime;
+  int    timer;
   pcb_t  *pcb;
 
   /* Initialize my data structures. */
-
   if (List_init( &processes )) {
 
     /* This creates an infinite loop from which you will need to do a
        ^C to stop the program.  This may not be the most elegant solution
        for you. */
-
     while (1) {
       if (fgets( inputbuffer, BUF_MAX-1, stdin )) {
       	/* Put the parameters into a PCB and store it in the list of processes. */
