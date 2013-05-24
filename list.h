@@ -2,15 +2,17 @@
 #ifndef _list_h_
 #define _list_h_
 
-typedef struct list_node {
-  void             *data;
-  struct list_node *next;
-  struct list_node *prev;
+typedef struct list_node
+{
+    void             *data;
+    struct list_node *next;
+    struct list_node *prev;
 } List_node_t;
 
-typedef struct {
-  List_node_t *head;
-  List_node_t *tail;
+typedef struct
+{
+    List_node_t *head;
+    List_node_t *tail;
 } List_t;
 
 int  List_init ( List_t *list );

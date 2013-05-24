@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h> //For interrupt handling
+#include <unistd.h> //For SIGALRM function
 #include "list.h"
 
 
@@ -14,13 +15,125 @@ List_t processes;
 List_t running;
 List_t blocked;
 
+/* Define the struct for the PCB
+   Takes in name, lifetime and running time */
+typedef struct
+{
+    char name[NAME_MAX];
+    int  lifetime;
+    int  runningTime;
+} pcb_t;
+
+/* Moves the head node from ready to the running queue */
+void
+readyState()
+{
+    // Keep track of time in state
+    static int time_in_state = 0;
+    /* Call move code if there is something at the head of the ready queue and
+       there is no running process */
+    if (processes.head != NULL && running.head == NULL)
+    {
+        // Remove from ready queue
+        pcb_t *process;
+        List_remove_head(&processes, (void *)&process);
+
+        // Add to running queue
+        List_add_head(&running, process);
+
+        // Print out transition
+        printf("%s transition from ready (%d) to running state\n", process->name, time_in_state);
+
+        //Reset time in state
+        time_in_state = 0;
+    }
+    else if (processes.head != NULL && running.head != NULL)
+    {
+        time_in_state++;
+    }
+    else
+    {
+        // Ready queue is empty so do nothing
+    }
+}
+
+/* Moves the head node from the running queue to the ready queue */
+void
+runningState()
+{
+    // Keep track of time in state
+    static int time_in_state = 0;
+
+    /* Call move code if there is something at the head of the running queue */
+    if (running.head != NULL)
+    {
+        // Get head of running processes
+        pcb_t *process;
+        List_head_info(&running, (void *)&process);
+
+        // Send to Exit queue and deallocate when lifetime is 0 or running time is set to 0
+        if (process->lifetime <= 0 || process->runningTime == 0)
+        {
+            // Remove and deallocate
+            List_remove_head(&running, (void *)&process);
+
+            // Print out transition
+            printf("%s transition from running (%d) to exit state\n", process->name, time_in_state);
+
+            // Free the memory up
+            free(process);
+
+            //Reset time in state
+            time_in_state = 0;
+        }
+
+        // Time on CPU has expired for current running process
+        else if (time_in_state == process->runningTime && process->lifetime > 0)
+        {
+            // Remove from running queue
+            List_remove_head(&running, (void *)&process);
+
+            // Add to ready queue tail
+            List_add_tail(&processes, process);
+
+            // Print out transition
+            printf("%s transition from running (%d) to ready state\n", process->name, time_in_state);
+
+            //Reset time in state
+            time_in_state = 0;
+        }
+        else if (time_in_state != process->runningTime && process->lifetime > 0)
+        {
+            time_in_state++;
+            process->lifetime--;
+        }
+    }
+    else
+    {
+        // Nothing in queue so do nothing, processes are blocked or exited
+    }
+}
+
+/* Moves the head node from the running queue to the blocked queue*/
+void
+moveToBlocked()
+{
+    char processname[20] = "";
+    char from_state[20] = "running state";
+    int time_in_state = 0;
+    char to_state[20] = "blocked state";
+    printf("%s transition from %s (%d) to %s\n", processname, from_state, time_in_state, to_state);
+}
+
 /* This function overides the default SIGALRM and handles all of the state
    transitions for the different processes */
 void
 stateTransitions( int the_signal )
 {
-    printf ("One time unit has passed\n");
-
+    // Move anything in ready to running if possible
+    readyState();
+    // Move anything in running to ready if possible
+    runningState();
     alarm( timer );
 }
 
@@ -65,19 +178,10 @@ readConfigTimer()
 
     // Scan in the unit of time in the format timer=[num]
     fscanf(inFile, "timer=%d", &unitOfTime);
-    printf("The timer is %d", unitOfTime);
+    printf("The timer is %d\n\n", unitOfTime);
 
     return unitOfTime;
 }
-
-/* Define the struct for the PCB
-   Takes in name, lifetime and running time */
-typedef struct
-{
-    char name[NAME_MAX];
-    int  lifetime;
-    int  runningTime;
-} pcb_t;
 
 // Main function
 int
@@ -95,6 +199,7 @@ main( int argc, char **argv )
     if (List_init( &processes ) && List_init( &running ) && List_init( &blocked ))
     {
 
+        // Initialize timer value
         timer = readConfigTimer();
         //Set up alarm code
         setUpAlarm(timer);
