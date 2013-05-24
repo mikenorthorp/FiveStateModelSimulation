@@ -2,24 +2,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h> //For interrupt handling
 #include "list.h"
+
 
 #define BUF_MAX  (81)
 #define NAME_MAX (21)
 
+/* Define the struct for the PCB
+   Takes in name, lifetime and running time */
 typedef struct {
   char name[NAME_MAX];
   int  lifetime;
+  int  runningTime;
 } pcb_t;
 
+// Main function
 int
 main( int argc, char **argv )
 {
+  // Declare initial variables
   int    error_code = 0;  /* In unix, a program returns 0 if all is ok. */
   List_t processes;
   char   inputbuffer[BUF_MAX];
   char   name[BUF_MAX];
   int    lifetime;
+  int    runningTime;
   pcb_t  *pcb;
 
   /* Initialize my data structures. */
@@ -32,28 +40,39 @@ main( int argc, char **argv )
 
     while (1) {
       if (fgets( inputbuffer, BUF_MAX-1, stdin )) {
-	/* Put the parameters into a PCB and store it in the list of processes. */
-	if (sscanf( inputbuffer, "%s %d", name, &lifetime) == 2) {
-	  /* We have all the input that is required. */
+      	/* Put the parameters into a PCB and store it in the list of processes. */
+      	if (sscanf( inputbuffer, "%s %d %d", name, &lifetime, &runningTime) == 3) {
+        /* We have all the input that is required. */
 
-	  pcb = (pcb_t *) malloc( sizeof( pcb_t ) );
-	  if (pcb != NULL) {
-	    strncpy( pcb->name, name, NAME_MAX-1 );
-	    pcb->name[NAME_MAX] = '\0'; /* Make sure that it is null-terminated. */
-	    pcb->lifetime = lifetime;
-	    printf ("Read and stored process %s with lifetime %d\n", pcb->name, pcb->lifetime);
+          // Allocate memory for PCB
+      	  pcb = (pcb_t *) malloc( sizeof( pcb_t ) );
+      	  if (pcb != NULL) {
+      	    strncpy( pcb->name, name, NAME_MAX-1 );
+      	    pcb->name[NAME_MAX] = '\0'; /* Make sure that it is null-terminated. */
+      	    pcb->lifetime = lifetime;
+            pcb->runningTime = runningTime;
 
-	    if (List_add_tail( &processes, (void *)pcb ) == 0) {
-	      printf ("Error in inserting the process into the list.\n");
-	    }
-	  } else {
-	    printf( "Unable to allocate enough memory.\n");
-	  }
-	} else {
-	  printf ("Incorrect number of parameters read.\n");
-	}
+            //Show that process has been read and stored
+      	    printf ("Read and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
+
+            // Could not insert process into list
+      	    if (List_add_tail( &processes, (void *)pcb ) == 0) {
+      	      printf ("Error in inserting the process into the list.\n");
+      	    }
+
+          // Error, not enough memory to make PCB
+      	  } else {
+      	    printf( "Unable to allocate enough memory.\n");
+      	  }
+
+        // Incorrect number of parameters read in
+      	} else {
+      	  printf ("Incorrect number of parameters read.\n");
+      	}
+
+      // No paramters read in
       } else {
-	printf ("Nothing read in.\n");
+	      printf ("Nothing read in.\n");
       }
     }
 
@@ -62,6 +81,7 @@ main( int argc, char **argv )
     error_code = 1;
   }
 
+  // End of program
   return error_code;
 }
 
