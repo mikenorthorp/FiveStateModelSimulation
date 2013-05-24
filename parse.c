@@ -11,6 +11,8 @@
 
 // Global variables for timer and queues
 int timer = 0;
+// Keep track of time in running state
+static int running_time_in_state = 0;
 List_t processes;
 List_t running;
 List_t blocked;
@@ -29,7 +31,7 @@ void
 readyState()
 {
     // Keep track of time in state
-    static int time_in_state = 0;
+    static int time_at_head = 0;
     /* Call move code if there is something at the head of the ready queue and
        there is no running process */
     if (processes.head != NULL && running.head == NULL)
@@ -42,14 +44,14 @@ readyState()
         List_add_head(&running, process);
 
         // Print out transition
-        printf("%s transition from ready (%d) to running state\n", process->name, time_in_state);
+        printf("%s transition from ready (%d) to running state\n", process->name, time_at_head);
 
         //Reset time in state
-        time_in_state = 0;
+        time_at_head = 0;
     }
     else if (processes.head != NULL && running.head != NULL)
     {
-        time_in_state++;
+        time_at_head++;
     }
     else
     {
@@ -61,9 +63,6 @@ readyState()
 void
 runningState()
 {
-    // Keep track of time in state
-    static int time_in_state = 0;
-
     /* Call move code if there is something at the head of the running queue */
     if (running.head != NULL)
     {
@@ -78,17 +77,17 @@ runningState()
             List_remove_head(&running, (void *)&process);
 
             // Print out transition
-            printf("%s transition from running (%d) to exit state\n", process->name, time_in_state);
+            printf("%s transition from running (%d) to exit state\n", process->name, running_time_in_state);
 
             // Free the memory up
             free(process);
 
             //Reset time in state
-            time_in_state = 0;
+            running_time_in_state = 0;
         }
 
         // Time on CPU has expired for current running process
-        else if (time_in_state == process->runningTime && process->lifetime > 0)
+        else if (running_time_in_state == process->runningTime && process->lifetime > 0)
         {
             // Remove from running queue
             List_remove_head(&running, (void *)&process);
@@ -97,14 +96,14 @@ runningState()
             List_add_tail(&processes, process);
 
             // Print out transition
-            printf("%s transition from running (%d) to ready state\n", process->name, time_in_state);
+            printf("%s transition from running (%d) to ready state\n", process->name, running_time_in_state);
 
             //Reset time in state
-            time_in_state = 0;
+            running_time_in_state = 0;
         }
-        else if (time_in_state != process->runningTime && process->lifetime > 0)
+        else if (running_time_in_state != process->runningTime && process->lifetime > 0)
         {
-            time_in_state++;
+            running_time_in_state++;
             process->lifetime--;
         }
     }
@@ -116,13 +115,125 @@ runningState()
 
 /* Moves the head node from the running queue to the blocked queue*/
 void
-moveToBlocked()
+moveToBlockedState()
 {
-    char processname[20] = "";
-    char from_state[20] = "running state";
-    int time_in_state = 0;
-    char to_state[20] = "blocked state";
-    printf("%s transition from %s (%d) to %s\n", processname, from_state, time_in_state, to_state);
+
+    printf("Testing Blocked state transition");
+
+    /* Call code to move from running state to blocked if something is in the running
+       state */
+    if (running.head != NULL)
+    {
+        // Remove from running queue
+        pcb_t *process;
+        List_remove_head(&running, (void *)&process);
+
+        // Add to blocked queue
+        List_add_tail(&blocked, process);
+
+        // Print out transition from running to blocked state
+        printf("%s transition from running (%d) to blocked state\n", process->name, running_time_in_state);
+
+        // Reset timer
+        running_time_in_state = 0;
+    }
+    else
+    {
+        // Nothing in running queue so nothing blocked
+    }
+}
+
+/* Checks if anything is in blocked state and increases head timer until it hits
+   5, then removes it from blocked state and adds to ready queue */
+void
+blockedState()
+{
+    // Keep track of time in state
+    static int time_at_head = 0;
+
+    /* Call move code if there is something at the head of the blocked queue */
+    if (blocked.head != NULL)
+    {
+        // Processe has been in blocked state for 5 time units
+        if (time_at_head == 5)
+        {
+            // Remove from blocked queue
+            pcb_t *process;
+            List_remove_head(&blocked, (void *)&process);
+
+            // Add to ready queue tail
+            List_add_tail(&processes, process);
+
+            // Print out transition
+            printf("%s transition from blocked (%d) to ready state\n", process->name, time_at_head);
+
+            //Reset time in state
+            time_at_head = 0;
+        }
+        else if (time_at_head != 5)
+        {
+            time_at_head++;
+        }
+    }
+    else
+    {
+        // Nothing in queue so do nothing, no processes blocked
+    }
+}
+
+/* This prints out the queue info for a single queue */
+void
+printQueue(List_t *list, char *name)
+{
+    pcb_t *currentNode = NULL;
+    pcb_t *lastNode = NULL;
+
+    printf("%s queue:\n", name);
+
+    // If the head is null
+    if ((list != NULL) && (list->head != NULL))
+    {
+        List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        while (currentNode != NULL)
+        {
+            printf("\t%s timeleft\n", currentNode->name);
+            List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        }
+    }
+    else
+    {
+        printf("\tEmpty");
+    }
+}
+
+/* This displays the queue info for all of the queues */
+void
+displayQueueInfo()
+{
+    // Print out ready queue
+    printQueue(&processes, "Ready");
+    printf("\n");
+    // Print out running queue
+    printQueue(&running, "Running");
+    printf("\n");
+    // Print out blocked queue
+    printQueue(&blocked, "Blocked");
+    printf("\n");
+}
+
+/* This frees up all of the list nodes and the node data */
+void
+cleanupAndExit()
+{
+  printf("Freeing up memory\n");
+  /* Free up lists (modified List_destroy function to remove pcb_t data as well
+     as node itself) */
+  List_destroy(&processes);
+  List_destroy(&running);
+  List_destroy(&blocked);
+  printf("Exiting program...\n");
+  // Exit program
+  exit(0);
 }
 
 /* This function overides the default SIGALRM and handles all of the state
@@ -134,6 +245,10 @@ stateTransitions( int the_signal )
     readyState();
     // Move anything in running to ready if possible
     runningState();
+    // Move anything from blocked to ready if possible
+    blockedState();
+
+    // Reset timer
     alarm( timer );
 }
 
@@ -211,6 +326,25 @@ main( int argc, char **argv )
         {
             if (fgets( inputbuffer, BUF_MAX - 1, stdin ))
             {
+
+                // Testing functions
+                int tester;
+                if (sscanf(inputbuffer, "%d", &tester) == 1)
+                {
+                    if (tester == 700)
+                    {
+                        moveToBlockedState();
+                    }
+                    if (tester == 600)
+                    {
+                        displayQueueInfo();
+                    }
+                    if (tester == 500)
+                    {
+                        cleanupAndExit();
+                    }
+                }
+
                 /* Put the parameters into a PCB and store it in the list of processes. */
                 if (sscanf( inputbuffer, "%s %d %d", name, &lifetime, &runningTime) == 3)
                 {
