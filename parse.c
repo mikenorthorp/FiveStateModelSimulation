@@ -1,3 +1,15 @@
+/* parse.c
+   Michael Northorp - CSCI 3120 - Assignment 1
+   This program simulates processes going through the
+   5 state model for process management.
+   Processes start in a new queue when they are created,
+   and they travel too the ready queue right away. They then
+   go into the running queue if possible and run for their
+   running duration. Processes can be blocked by system intterupts
+   and will go into the exit queue when they have ran for their lifetime
+   duration. For more details see the readme. */
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,7 +78,7 @@ main( int argc, char **argv )
                         pcb->time_in_state = 0;
 
                         //Show that process has been read and stored
-                        printf ("Read and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
+                        printf ("\nRead and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
 
                         // Could not insert process into list
                         if (List_add_tail( &processes, (void *)pcb ) == 0)
@@ -134,7 +146,7 @@ readyState()
         List_add_head(&running, process);
 
         // Print out transition
-        printf("%s transition from ready (%d) to running state\n", process->name, process->time_in_state);
+        printf("\n%s transition from ready (%d) to running state\n", process->name, process->time_in_state);
 
         process->time_in_state = 0;
     }
@@ -165,7 +177,7 @@ runningState()
             List_remove_head(&running, (void *)&process);
 
             // Print out transition
-            printf("%s transition from running (%d) to exit state\n", process->name, process->time_in_state);
+            printf("\n%s transition from running (%d) to exit state\n", process->name, process->time_in_state);
 
             // Free the memory up
             free(process);
@@ -181,7 +193,7 @@ runningState()
             List_add_tail(&processes, process);
 
             // Print out transition
-            printf("%s transition from running (%d) to ready state\n", process->name, process->time_in_state);
+            printf("\n%s transition from running (%d) to ready state\n", process->name, process->time_in_state);
 
             //Reset time in state
             process->time_in_state = 0;
@@ -214,7 +226,7 @@ blockedState()
             List_add_tail(&processes, process);
 
             // Print out transition
-            printf("%s transition from blocked (%d) to ready state\n", process->name, process->time_in_state);
+            printf("\n%s transition from blocked (%d) to ready state\n", process->name, process->time_in_state);
 
             //Reset time in state
             time_at_head = 0;
@@ -244,7 +256,6 @@ stateTransitions( int the_signal )
     // Move anything from blocked to ready if possible
     blockedState();
 
-    displayQueueInfo(0);
     // Reset timer
     alarm( timer );
 }
@@ -271,7 +282,7 @@ moveToBlockedState(int signal)
         List_add_tail(&blocked, process);
 
         // Print out transition from running to blocked state
-        printf("%s transition from running (%d) to blocked state\n", process->name, process->time_in_state);
+        printf("\n%s transition from running (%d) to blocked state\n", process->name, process->time_in_state);
 
         // Reset timer
         process->time_in_state = 0;
@@ -457,7 +468,7 @@ readConfigTimer()
 
     // Scan in the unit of time in the format timer=[num]
     fscanf(inFile, "timer=%d", &unitOfTime);
-    printf("The timer is %d\n\n", unitOfTime);
+    printf("The timer is %d second(s) per unit of time\n\n", unitOfTime);
 
     // Close the file
     fclose(inFile);
