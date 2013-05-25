@@ -11,8 +11,6 @@
 
 // Global variables for timer and queues
 int timer = 0;
-// Keep track of time in running state
-static int running_time_in_state = 0;
 List_t processes;
 List_t running;
 List_t blocked;
@@ -24,7 +22,28 @@ typedef struct
     char name[NAME_MAX];
     int  lifetime;
     int  runningTime;
+    int  time_in_state;
 } pcb_t;
+
+/* This functions goes through a queue and updates the time each pcb_t has
+   been in their state by one */
+void
+updateQueueTime(List_t *list)
+{
+    pcb_t *currentNode = NULL;
+    pcb_t *lastNode = NULL;
+
+    // If the head is null
+    if ((list != NULL) && (list->head != NULL))
+    {
+        List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        while (currentNode != NULL)
+        {
+            currentNode->time_in_state++;
+            List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        }
+    }
+}
 
 /* Moves the head node from ready to the running queue */
 void
@@ -44,14 +63,16 @@ readyState()
         List_add_head(&running, process);
 
         // Print out transition
-        printf("%s transition from ready (%d) to running state\n", process->name, time_at_head);
+        printf("%s transition from ready (%d) to running state\n", process->name, process->time_in_state);
 
         //Reset time in state
         time_at_head = 0;
+        process->time_in_state = 0;
     }
     else if (processes.head != NULL && running.head != NULL)
     {
         time_at_head++;
+        updateQueueTime(&processes);
     }
     else
     {
@@ -63,6 +84,10 @@ readyState()
 void
 runningState()
 {
+
+    // Keep track of time in state
+    static int time_at_head = 0;
+
     /* Call move code if there is something at the head of the running queue */
     if (running.head != NULL)
     {
@@ -71,23 +96,23 @@ runningState()
         List_head_info(&running, (void *)&process);
 
         // Send to Exit queue and deallocate when lifetime is 0 or running time is set to 0
-        if (process->lifetime <= 0 || process->runningTime == 0)
+        if (process->lifetime <= 0 || process->runningTime <= 0)
         {
             // Remove and deallocate
             List_remove_head(&running, (void *)&process);
 
             // Print out transition
-            printf("%s transition from running (%d) to exit state\n", process->name, running_time_in_state);
+            printf("%s transition from running (%d) to exit state\n", process->name, process->time_in_state);
 
             // Free the memory up
             free(process);
 
             //Reset time in state
-            running_time_in_state = 0;
+            time_at_head = 0;
         }
 
         // Time on CPU has expired for current running process
-        else if (running_time_in_state == process->runningTime && process->lifetime > 0)
+        else if (time_at_head >= process->runningTime && process->lifetime > 0)
         {
             // Remove from running queue
             List_remove_head(&running, (void *)&process);
@@ -96,14 +121,18 @@ runningState()
             List_add_tail(&processes, process);
 
             // Print out transition
-            printf("%s transition from running (%d) to ready state\n", process->name, running_time_in_state);
+            printf("%s transition from running (%d) to ready state\n", process->name, process->time_in_state);
 
+            //Update all of running queue
+            updateQueueTime(&running);
             //Reset time in state
-            running_time_in_state = 0;
+            time_at_head = 0;
+            process->time_in_state = 0;
         }
-        else if (running_time_in_state != process->runningTime && process->lifetime > 0)
+        else if (time_at_head != process->runningTime && process->lifetime > 0)
         {
-            running_time_in_state++;
+            time_at_head++;
+            updateQueueTime(&running);
             process->lifetime--;
         }
     }
@@ -117,9 +146,6 @@ runningState()
 void
 moveToBlockedState()
 {
-
-    printf("Testing Blocked state transition");
-
     /* Call code to move from running state to blocked if something is in the running
        state */
     if (running.head != NULL)
@@ -132,10 +158,10 @@ moveToBlockedState()
         List_add_tail(&blocked, process);
 
         // Print out transition from running to blocked state
-        printf("%s transition from running (%d) to blocked state\n", process->name, running_time_in_state);
+        printf("%s transition from running (%d) to blocked state\n", process->name, process->time_in_state);
 
         // Reset timer
-        running_time_in_state = 0;
+        process->time_in_state = 0;
     }
     else
     {
@@ -165,14 +191,19 @@ blockedState()
             List_add_tail(&processes, process);
 
             // Print out transition
-            printf("%s transition from blocked (%d) to ready state\n", process->name, time_at_head);
+            printf("%s transition from blocked (%d) to ready state\n", process->name, process->time_in_state);
+
+            //Update all but head being moved
+            updateQueueTime(&blocked);
 
             //Reset time in state
             time_at_head = 0;
+            process->time_in_state = 0;
         }
         else if (time_at_head != 5)
         {
             time_at_head++;
+            updateQueueTime(&blocked);
         }
     }
     else
@@ -196,7 +227,7 @@ printQueue(List_t *list, char *name)
         List_next_node(list, (void *)&lastNode, (void *)&currentNode);
         while (currentNode != NULL)
         {
-            printf("\t%s timeleft\n", currentNode->name);
+            printf("\t%s %d %d\n", currentNode->name, currentNode->lifetime, currentNode->time_in_state);
             List_next_node(list, (void *)&lastNode, (void *)&currentNode);
         }
     }
@@ -211,6 +242,7 @@ void
 displayQueueInfo()
 {
     // Print out ready queue
+    printf("\n");
     printQueue(&processes, "Ready");
     printf("\n");
     // Print out running queue
@@ -225,15 +257,15 @@ displayQueueInfo()
 void
 cleanupAndExit()
 {
-  printf("Freeing up memory\n");
-  /* Free up lists (modified List_destroy function to remove pcb_t data as well
-     as node itself) */
-  List_destroy(&processes);
-  List_destroy(&running);
-  List_destroy(&blocked);
-  printf("Exiting program...\n");
-  // Exit program
-  exit(0);
+    printf("\nFreeing up memory\n");
+    /* Free up lists (modified List_destroy function to remove pcb_t data as well
+       as node itself) */
+    List_destroy(&processes);
+    List_destroy(&running);
+    List_destroy(&blocked);
+    printf("Exiting program...\n");
+    // Exit program
+    exit(0);
 }
 
 /* This function overides the default SIGALRM and handles all of the state
@@ -241,12 +273,16 @@ cleanupAndExit()
 void
 stateTransitions( int the_signal )
 {
-    // Move anything in ready to running if possible
-    readyState();
+    printf("\n\nStarclock: \n");
+    displayQueueInfo();
     // Move anything in running to ready if possible
     runningState();
+    // Move anything in ready to running if possible
+    readyState();
     // Move anything from blocked to ready if possible
     blockedState();
+    printf("\nEndclock: \n");
+    displayQueueInfo();
 
     // Reset timer
     alarm( timer );
@@ -268,6 +304,74 @@ setUpAlarm(int timer)
     {
         /* Start the timer and then wait! */
         alarm( timer );
+    }
+
+    return return_code;
+}
+
+/* Updates config timer */
+int
+reConfigTimer()
+{
+    timer = readConfigTimer();
+
+    return 0;
+}
+
+/* Set up SIGUSR1 to print the state of the queues, ready, running and blocked */
+int
+setUpStateLister()
+{
+    int return_code = 0;
+
+    if (signal( SIGUSR1, displayQueueInfo ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+
+/* Set up SIGUSR2 to block the running process  */
+int
+setUpBlocker()
+{
+    int return_code = 0;
+
+    if (signal( SIGUSR2, moveToBlockedState ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+
+/* Set up SIGHUP to reread the config file and update the alarm timer */
+int
+setUpConfigUpdater()
+{
+    int return_code = 0;
+
+    if (signal( SIGHUP, reConfigTimer ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+/* Set up SIGINT */
+int
+setUpExit()
+{
+    int return_code = 0;
+
+    if (signal( SIGINT, cleanupAndExit ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
     }
 
     return return_code;
@@ -295,6 +399,9 @@ readConfigTimer()
     fscanf(inFile, "timer=%d", &unitOfTime);
     printf("The timer is %d\n\n", unitOfTime);
 
+    // Close the file
+    fclose(inFile);
+
     return unitOfTime;
 }
 
@@ -316,8 +423,12 @@ main( int argc, char **argv )
 
         // Initialize timer value
         timer = readConfigTimer();
-        //Set up alarm code
+        //Set up handlers
         setUpAlarm(timer);
+        setUpExit();
+        setUpBlocker();
+        setUpConfigUpdater();
+        setUpStateLister();
 
         /* This creates an infinite loop from which you will need to do a
            ^C to stop the program.  This may not be the most elegant solution
@@ -343,6 +454,10 @@ main( int argc, char **argv )
                     {
                         cleanupAndExit();
                     }
+                    if (tester == 400)
+                    {
+                        timer = readConfigTimer();
+                    }
                 }
 
                 /* Put the parameters into a PCB and store it in the list of processes. */
@@ -358,6 +473,7 @@ main( int argc, char **argv )
                         pcb->name[NAME_MAX] = '\0'; /* Make sure that it is null-terminated. */
                         pcb->lifetime = lifetime;
                         pcb->runningTime = runningTime;
+                        pcb->time_in_state = 0;
 
                         //Show that process has been read and stored
                         printf ("Read and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
