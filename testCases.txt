@@ -1,8 +1,81 @@
-Testing with 1 process
+------------------------------
+Test Cases
+------------------------------
 
-Testing with 2 processes
+Tests Done With 0 Proccess
 
-Testing with 3 processes
+1. Made sure program accepts a proccess with 3 parameters (name, lifetime duration
+and running duration)
 
-Testing with 4 or more processes
+2. Made sure program loops forever until a SIGINT intterupt(CTRL+C)
+
+3. Display timer from config.txt on start up correctly
+
+4. Prints out all empty queues when given a SIGUSR1 Intterupt
+
+5. Ignores SIGUSR2 Intterupt when nothing in the running queue
+
+6. SIGHUP Intterupt will update the config and display the new unit of time if
+   changed
+
+------------------------------
+
+Tests Done With 1 Proccess
+
+1. Accepts more than one process correctly after one process is in running
+
+2. Keeps looping for input until a SIGINT intterupt (CTRL+C)
+
+3. Proccess transitions from Ready queue to running queue properly.
+	- When running duration is 1
+	- When running duration is 2
+	- When running duration is greater than 2
+
+4. Proccess exits immediately if running time is 0 or less or lifetime is 0 or less
+   when in running queue. Also frees up memory.
+
+5. If proccess is in running queue and a SIGUSR2 intterupt happens, the process
+   will go right to the blocked queue and stay there for 5 time units
+
+6. SIGHUP Intterupt will update the config and display the new unit of time if
+   changed
+
+7. Transitions print out correct time in states for all durations
+
+7. All from Tests done With 0 Proccess
+
+Tests Done With 2 Proccess
+
+1. All Tests from above work with 2 proccesses
+
+2. Proccesses switch back and forth from ready to running, take turns sharing
+   CPU.
+
+------------------------------
+
+Tests Done With 3 Proccess
+
+1. All Tests from above work with 3 proccesses
+
+2. Can have 1 process in every queue without issues (ready, running, blocked)
+
+------------------------------
+
+Tests Done With 4 or more
+
+1. All tests from above work with 4 or more proccesses
+
+------------------------------
+
+Other Tests
+
+1. Double checked all intterupts worked properly
+
+2. Checked for memory leakss
+
+3. Made sure there was error/validation checking for proccess handlers and input
+
+4. Program compiles properly on bluenose
+
+5. Code is commented properly
 
