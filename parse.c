@@ -120,8 +120,6 @@ main( int argc, char **argv )
 void
 readyState()
 {
-    // Keep track of time in state
-    static int time_at_head = 0;
     /* Call move code if there is something at the head of the ready queue and
        there is no running process */
     if (processes.head != NULL && running.head == NULL)
@@ -138,14 +136,7 @@ readyState()
         // Print out transition
         printf("%s transition from ready (%d) to running state\n", process->name, process->time_in_state);
 
-        //Reset time in state
-        time_at_head = 0;
         process->time_in_state = 0;
-    }
-    else if (processes.head != NULL && running.head != NULL)
-    {
-        time_at_head++;
-        updateQueueTime(&processes);
     }
     else
     {
@@ -157,18 +148,16 @@ readyState()
 void
 runningState()
 {
-    // Keep track of time in state
-    static int time_at_head = 0;
-
     /* Call move code if there is something at the head of the running queue */
     if (running.head != NULL)
     {
+
         // Create pcb_t pointer for process and state transitions
         pcb_t *process;
-
         // Get head of running processes
         List_head_info(&running, (void *)&process);
 
+        process->lifetime--;
         // Send to Exit queue and deallocate when lifetime is 0 or running time is set to 0
         if (process->lifetime <= 0 || process->runningTime <= 0)
         {
@@ -180,13 +169,10 @@ runningState()
 
             // Free the memory up
             free(process);
-
-            //Reset time in state
-            time_at_head = 0;
         }
 
         // Time on CPU has expired for current running process
-        else if (time_at_head >= process->runningTime && process->lifetime > 0)
+        else if (process->time_in_state >= process->runningTime && process->lifetime > 0)
         {
             // Remove from running queue
             List_remove_head(&running, (void *)&process);
@@ -197,22 +183,9 @@ runningState()
             // Print out transition
             printf("%s transition from running (%d) to ready state\n", process->name, process->time_in_state);
 
-            //Update all of running queue
-            updateQueueTime(&running);
             //Reset time in state
-            time_at_head = 0;
             process->time_in_state = 0;
         }
-        else if (time_at_head != process->runningTime && process->lifetime > 0)
-        {
-            time_at_head++;
-            updateQueueTime(&running);
-            process->lifetime--;
-        }
-    }
-    else
-    {
-        // Nothing in queue so do nothing, processes are blocked or exited
     }
 }
 
@@ -227,6 +200,7 @@ blockedState()
     /* Call move code if there is something at the head of the blocked queue */
     if (blocked.head != NULL)
     {
+        time_at_head++;
         // Processe has been in blocked state for 5 time units
         if (time_at_head == 5)
         {
@@ -242,17 +216,9 @@ blockedState()
             // Print out transition
             printf("%s transition from blocked (%d) to ready state\n", process->name, process->time_in_state);
 
-            //Update all but head being moved
-            updateQueueTime(&blocked);
-
             //Reset time in state
             time_at_head = 0;
             process->time_in_state = 0;
-        }
-        else if (time_at_head != 5)
-        {
-            time_at_head++;
-            updateQueueTime(&blocked);
         }
     }
     else
@@ -266,6 +232,11 @@ blockedState()
 void
 stateTransitions( int the_signal )
 {
+    // Update all queues by one time unit for their time in state
+    updateQueueTime(&processes);
+    updateQueueTime(&running);
+    updateQueueTime(&blocked);
+
     // Move anything in running to ready if possible
     runningState();
     // Move anything in ready to running if possible
@@ -273,6 +244,7 @@ stateTransitions( int the_signal )
     // Move anything from blocked to ready if possible
     blockedState();
 
+    displayQueueInfo(0);
     // Reset timer
     alarm( timer );
 }
@@ -283,7 +255,7 @@ stateTransitions( int the_signal )
 
 /* Moves the head node from the running queue to the blocked queue*/
 void
-moveToBlockedState()
+moveToBlockedState(int signal)
 {
     /* Call code to move from running state to blocked if something is in the running
        state */
@@ -308,7 +280,7 @@ moveToBlockedState()
 
 /* This frees up all of the list nodes and the node data */
 void
-cleanupAndExit()
+cleanupAndExit(int signal)
 {
     printf("\nFreeing up memory\n");
 
@@ -422,7 +394,7 @@ printQueue(List_t *list, char *name)
 
 /* This displays the queue info for all of the queues */
 void
-displayQueueInfo()
+displayQueueInfo(int signal)
 {
     // Print out ready queue
     printf("\n");
@@ -516,10 +488,9 @@ setUpAlarm(int timer)
 }
 
 /* Updates config timer when called by SIGHUP intterupt*/
-int
-updateConfigTimer()
+void
+updateConfigTimer(int signal)
 {
     timer = readConfigTimer();
-    return 0;
 }
 

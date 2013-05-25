@@ -23,8 +23,8 @@ void stateTransitions(int the_signal);
 
 /* Intterupt Handlers and Functions*/
 
-void moveToBlockedState();
-void cleanupAndExit();
+void moveToBlockedState(int signal);
+void cleanupAndExit(int signal);
 int setUpStateLister();
 int setUpBlocker();
 int setUpConfigUpdater();
@@ -32,13 +32,13 @@ int setUpExit();
 
 /* Queue display */
 void printQueue(List_t *list, char *name);
-void displayQueueInfo();
+void displayQueueInfo(int signal);
 void updateQueueTime(List_t *list);
 
 /* Config functions */
 int readConfigTimer();
 int setUpAlarm(int timer);
-int updateConfigTimer();
+void updateConfigTimer(int signal);
 
 #endif /* _parse_h_ */
 
