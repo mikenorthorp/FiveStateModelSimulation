@@ -1,6 +1,9 @@
 README
 ======
 
+README and code base best viewed on [Github](https://github.com/mikenorthorp/FiveStateModelSimulation/)
+
+
 This is an assignment for my Operating Systems class CSCI 3120
 
 It is an implementation of the 5 state process management model using
@@ -35,7 +38,7 @@ Making the Program Do Things
 
 1. Type in a proccess in the form of
    `processname total_duration running_state_duration`
-   ex. firefox 20 3
+   ex. 'firefox 20 3'
 
    This would make a proccess called firefox run for 3 units of time whenever it
    is in the running queue, and exit once it has ran for 20 units of time total.
@@ -70,61 +73,106 @@ unit of time, to however long you want a unit of time to be for your processes.
 Method Descriptions
 ------------------
 
-list.c and list.h - Linked List Structure
------------------
+#### list.c and list.h - Linked List Structure ####
 
 Linked list structure with methods for adding, removing, and getting
 nodes from a list.
 
-parse.c and parse.h - Main File
--------------------
+#### parse.c and parse.h - Main File ####
 
 This does all of the logic, intterupt handling and gets user input for the
 program.
 
-State functions
----------------
+#### State functions ####
 
 void readyState();
+
 	- Handles logic for moving from the ready state to other states.
+
 void runningState();
+
 	- Handles logic for moving from the running state to other states.
+
 void blockedState();
+
 	- Handles logic for moving from the blocked state to other states.
+
 void stateTransitions(int the_signal);
+
 	- Handles logic for what to run every time a SIGALRM inttterupt happens.
 
-Intterupt Handlers and Functions
---------------------------------
+
+#### Intterupt Handlers and Functions ####
 
 void moveToBlockedState(int signal);
+
+	- Moves a proccess from running queue to blocked queue if called by
+	  SIGUSR2 intterupt
+
 void cleanupAndExit(int signal);
+
+	- Frees all memory and exits the program when called by `CTRL+C` or
+	  SIGINT
+
 int setUpStateLister();
+
+	- Sets up the SIGUSR1 intterupt handler for listing all of the queues
+
 int setUpBlocker();
+
+	- Sets up the SIGUSR2 intterupt handler for blocking running proccesses
+
 int setUpConfigUpdater();
+
+	- Sets up the SIGHUP intterupt handler for updating the timer while the
+	  program is running.
+
 int setUpExit();
 
-Queue display
--------------
+	- Sets up the SIGINT intterupt handler for exiting and freeing memory
+	  in the program.
+
+#### Queue display ####
 
 void printQueue(List_t *list, char *name);
+
+	- This prints out a queue and all of its nodes in the format
+	  `proccessname total_duration_left_to_run`
+
 void displayQueueInfo(int signal);
+
+	- This displays all of the queues and their contents when called by
+	  the SIGUSR1 intterupt
+
 void updateQueueTime(List_t *list);
 
-Config functions
-----------------
+	- This updates the current time every proccess has been in it's current
+	  queue by 1 time unit.
+
+#### Config functions ####
 
 int readConfigTimer();
+
+	- This reads the config.txt file and grabs the number from timer=x, where
+	  x is the seconds for a unit of time. It also sets the timer variable to
+	  the number it reads.
+
 int setUpAlarm(int timer);
+
+	- This sets up the SIGALRM intterupt handler to run the proccess managment
+	  logic.
+
 void updateConfigTimer(int signal);
+
+	- This updates the timer from the config.txt when called by SIGHUP
 
 
 Citations
 =========
 
-Travis Roberts helped explain how the linked list functions worked with the void
-pointers, and how you can pop off the head and add to another queue without
-segmentation faults or errors.
+Travis Roberts (classmate) helped explain how the linked list functions
+worked with the void pointers, and how you can pop off the head and add
+to another queue without segmentation faults or errors.
 
 
 
