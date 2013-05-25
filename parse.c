@@ -4,10 +4,7 @@
 #include <signal.h> //For interrupt handling
 #include <unistd.h> //For SIGALRM function
 #include "list.h"
-
-
-#define BUF_MAX  (81)
-#define NAME_MAX (21)
+#include "parse.h"
 
 // Global variables for timer and queues
 int timer = 0;
@@ -15,35 +12,106 @@ List_t processes;
 List_t running;
 List_t blocked;
 
-/* Define the struct for the PCB
-   Takes in name, lifetime and running time */
-typedef struct
+/***********************************
+ *  Main
+ ***********************************/
+int
+main( int argc, char **argv )
 {
-    char name[NAME_MAX];
-    int  lifetime;
-    int  runningTime;
-    int  time_in_state;
-} pcb_t;
+    // Declare initial variables
+    int    error_code = 0;  /* In unix, a program returns 0 if all is ok. */
+    char   inputbuffer[BUF_MAX];
+    char   name[BUF_MAX];
+    int    lifetime;
+    int    runningTime;
+    pcb_t  *pcb;
 
-/* This functions goes through a queue and updates the time each pcb_t has
-   been in their state by one */
-void
-updateQueueTime(List_t *list)
-{
-    pcb_t *currentNode = NULL;
-    pcb_t *lastNode = NULL;
-
-    // If the head is null
-    if ((list != NULL) && (list->head != NULL))
+    /* Initialize my data structures. */
+    if (List_init( &processes ) && List_init( &running ) && List_init( &blocked ))
     {
-        List_next_node(list, (void *)&lastNode, (void *)&currentNode);
-        while (currentNode != NULL)
+
+        // Initialize timer value
+        timer = readConfigTimer();
+
+        //Set up handlers
+        setUpAlarm(timer);
+        setUpExit();
+        setUpBlocker();
+        setUpConfigUpdater();
+        setUpStateLister();
+
+        /* This creates an infinite loop from which you will need to do a
+           ^C to stop the program.  This may not be the most elegant solution
+           for you. */
+        while (1)
         {
-            currentNode->time_in_state++;
-            List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+            if (fgets( inputbuffer, BUF_MAX - 1, stdin ))
+            {
+                /* Put the parameters into a PCB and store it in the list of processes. */
+                if (sscanf( inputbuffer, "%s %d %d", name, &lifetime, &runningTime) == 3)
+                {
+                    /* We have all the input that is required. */
+
+                    // Allocate memory for PCB
+                    pcb = (pcb_t *) malloc( sizeof( pcb_t ) );
+                    if (pcb != NULL)
+                    {
+                        strncpy( pcb->name, name, NAME_MAX - 1 );
+                        pcb->name[NAME_MAX] = '\0'; /* Make sure that it is null-terminated. */
+                        pcb->lifetime = lifetime;
+                        pcb->runningTime = runningTime;
+                        pcb->time_in_state = 0;
+
+                        //Show that process has been read and stored
+                        printf ("Read and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
+
+                        // Could not insert process into list
+                        if (List_add_tail( &processes, (void *)pcb ) == 0)
+                        {
+                            printf ("Error in inserting the process into the list.\n");
+                        }
+
+                        // Error, not enough memory to make PCB
+                    }
+                    else
+                    {
+                        printf( "Unable to allocate enough memory.\n");
+                    }
+
+                    // Incorrect number of parameters read in
+                }
+                else
+                {
+                    printf ("Incorrect number of parameters read.\n");
+                }
+
+                // No paramters read in
+            }
+            else
+            {
+                printf ("Nothing read in.\n");
+            }
         }
+
     }
+    else
+    {
+        printf ("Unable to initialize the list of processes.\n");
+        error_code = 1;
+    }
+
+    // End of program
+    return error_code;
 }
+
+
+/***********************************
+ *  Main functions
+ ***********************************/
+
+/***********************************
+ *  State functions
+ ***********************************/
 
 /* Moves the head node from ready to the running queue */
 void
@@ -84,7 +152,6 @@ readyState()
 void
 runningState()
 {
-
     // Keep track of time in state
     static int time_at_head = 0;
 
@@ -142,33 +209,6 @@ runningState()
     }
 }
 
-/* Moves the head node from the running queue to the blocked queue*/
-void
-moveToBlockedState()
-{
-    /* Call code to move from running state to blocked if something is in the running
-       state */
-    if (running.head != NULL)
-    {
-        // Remove from running queue
-        pcb_t *process;
-        List_remove_head(&running, (void *)&process);
-
-        // Add to blocked queue
-        List_add_tail(&blocked, process);
-
-        // Print out transition from running to blocked state
-        printf("%s transition from running (%d) to blocked state\n", process->name, process->time_in_state);
-
-        // Reset timer
-        process->time_in_state = 0;
-    }
-    else
-    {
-        // Nothing in running queue so nothing blocked
-    }
-}
-
 /* Checks if anything is in blocked state and increases head timer until it hits
    5, then removes it from blocked state and adds to ready queue */
 void
@@ -212,6 +252,132 @@ blockedState()
     }
 }
 
+/* This function overides the default SIGALRM and handles all of the state
+   transitions for the different processes whenever the SIGALRM happens */
+void
+stateTransitions( int the_signal )
+{
+    // Move anything in running to ready if possible
+    runningState();
+    // Move anything in ready to running if possible
+    readyState();
+    // Move anything from blocked to ready if possible
+    blockedState();
+
+    // Reset timer
+    alarm( timer );
+}
+
+/***********************************
+ *  Intterupt Handlers and Functions
+ ***********************************/
+
+/* Moves the head node from the running queue to the blocked queue*/
+void
+moveToBlockedState()
+{
+    /* Call code to move from running state to blocked if something is in the running
+       state */
+    if (running.head != NULL)
+    {
+        // Remove from running queue
+        pcb_t *process;
+        List_remove_head(&running, (void *)&process);
+
+        // Add to blocked queue
+        List_add_tail(&blocked, process);
+
+        // Print out transition from running to blocked state
+        printf("%s transition from running (%d) to blocked state\n", process->name, process->time_in_state);
+
+        // Reset timer
+        process->time_in_state = 0;
+    }
+    else
+    {
+        // Nothing in running queue so nothing blocked
+    }
+}
+
+/* This frees up all of the list nodes and the node data */
+void
+cleanupAndExit()
+{
+    printf("\nFreeing up memory\n");
+    /* Free up lists (modified List_destroy function to remove pcb_t data as well
+       as node itself) */
+    List_destroy(&processes);
+    List_destroy(&running);
+    List_destroy(&blocked);
+    printf("Exiting program...\n");
+    // Exit program
+    exit(0);
+}
+
+/* Set up SIGUSR1 to print the state of the queues, ready, running and blocked */
+int
+setUpStateLister()
+{
+    int return_code = 0;
+
+    if (signal( SIGUSR1, displayQueueInfo ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+
+/* Set up SIGUSR2 to block the running process  */
+int
+setUpBlocker()
+{
+    int return_code = 0;
+
+    if (signal( SIGUSR2, moveToBlockedState ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+
+/* Set up SIGHUP to reread the config file and update the alarm timer */
+int
+setUpConfigUpdater()
+{
+    int return_code = 0;
+
+    if (signal( SIGHUP, updateConfigTimer ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+/* Set up SIGINT */
+int
+setUpExit()
+{
+    int return_code = 0;
+
+    if (signal( SIGINT, cleanupAndExit ) == SIG_ERR)
+    {
+        printf ("Unable to install handler\n");
+        return_code = 1;
+    }
+
+    return return_code;
+}
+
+
+/***********************************
+ *  Queue display
+ ***********************************/
+
 /* This prints out the queue info for a single queue */
 void
 printQueue(List_t *list, char *name)
@@ -253,125 +419,30 @@ displayQueueInfo()
     printf("\n");
 }
 
-/* This frees up all of the list nodes and the node data */
+/* This functions goes through a queue and updates the time each pcb_t has
+   been in their state by one */
 void
-cleanupAndExit()
+updateQueueTime(List_t *list)
 {
-    printf("\nFreeing up memory\n");
-    /* Free up lists (modified List_destroy function to remove pcb_t data as well
-       as node itself) */
-    List_destroy(&processes);
-    List_destroy(&running);
-    List_destroy(&blocked);
-    printf("Exiting program...\n");
-    // Exit program
-    exit(0);
-}
+    pcb_t *currentNode = NULL;
+    pcb_t *lastNode = NULL;
 
-/* This function overides the default SIGALRM and handles all of the state
-   transitions for the different processes */
-void
-stateTransitions( int the_signal )
-{
-    // Move anything in running to ready if possible
-    runningState();
-    // Move anything in ready to running if possible
-    readyState();
-    // Move anything from blocked to ready if possible
-    blockedState();
-
-    // Reset timer
-    alarm( timer );
-}
-
-
-/* Set up SIGALRM with custom timer from config.txt */
-int
-setUpAlarm(int timer)
-{
-    int return_code = 0;
-
-    if (signal( SIGALRM, stateTransitions ) == SIG_ERR)
+    // If the head is null
+    if ((list != NULL) && (list->head != NULL))
     {
-        printf ("Unable to install handler\n");
-        return_code = 1;
+        List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        while (currentNode != NULL)
+        {
+            currentNode->time_in_state++;
+            List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        }
     }
-    else
-    {
-        /* Start the timer and then wait! */
-        alarm( timer );
-    }
-
-    return return_code;
 }
 
-/* Updates config timer */
-int
-reConfigTimer()
-{
-    timer = readConfigTimer();
 
-    return 0;
-}
-
-/* Set up SIGUSR1 to print the state of the queues, ready, running and blocked */
-int
-setUpStateLister()
-{
-    int return_code = 0;
-
-    if (signal( SIGUSR1, displayQueueInfo ) == SIG_ERR)
-    {
-        printf ("Unable to install handler\n");
-        return_code = 1;
-    }
-
-    return return_code;
-}
-
-/* Set up SIGUSR2 to block the running process  */
-int
-setUpBlocker()
-{
-    int return_code = 0;
-
-    if (signal( SIGUSR2, moveToBlockedState ) == SIG_ERR)
-    {
-        printf ("Unable to install handler\n");
-        return_code = 1;
-    }
-
-    return return_code;
-}
-
-/* Set up SIGHUP to reread the config file and update the alarm timer */
-int
-setUpConfigUpdater()
-{
-    int return_code = 0;
-
-    if (signal( SIGHUP, reConfigTimer ) == SIG_ERR)
-    {
-        printf ("Unable to install handler\n");
-        return_code = 1;
-    }
-
-    return return_code;
-}
-/* Set up SIGINT */
-int
-setUpExit()
-{
-    int return_code = 0;
-
-    if (signal( SIGINT, cleanupAndExit ) == SIG_ERR)
-    {
-        printf ("Unable to install handler\n");
-        return_code = 1;
-    }
-
-    return return_code;
-}
+/***********************************
+ *  Config functions
+ ***********************************/
 
 /* This reads in the timer for the unit of time from
    the config.txt file */
@@ -401,115 +472,32 @@ readConfigTimer()
     return unitOfTime;
 }
 
-// Main function
+/* Set up SIGALRM with custom timer from config.txt */
 int
-main( int argc, char **argv )
+setUpAlarm(int timer)
 {
-    // Declare initial variables
-    int    error_code = 0;  /* In unix, a program returns 0 if all is ok. */
-    char   inputbuffer[BUF_MAX];
-    char   name[BUF_MAX];
-    int    lifetime;
-    int    runningTime;
-    pcb_t  *pcb;
+    int return_code = 0;
 
-    /* Initialize my data structures. */
-    if (List_init( &processes ) && List_init( &running ) && List_init( &blocked ))
+    if (signal( SIGALRM, stateTransitions ) == SIG_ERR)
     {
-
-        // Initialize timer value
-        timer = readConfigTimer();
-        //Set up handlers
-        setUpAlarm(timer);
-        setUpExit();
-        setUpBlocker();
-        setUpConfigUpdater();
-        setUpStateLister();
-
-        /* This creates an infinite loop from which you will need to do a
-           ^C to stop the program.  This may not be the most elegant solution
-           for you. */
-        while (1)
-        {
-            if (fgets( inputbuffer, BUF_MAX - 1, stdin ))
-            {
-
-                // Testing functions
-                int tester;
-                if (sscanf(inputbuffer, "%d", &tester) == 1)
-                {
-                    if (tester == 700)
-                    {
-                        moveToBlockedState();
-                    }
-                    if (tester == 600)
-                    {
-                        displayQueueInfo();
-                    }
-                    if (tester == 500)
-                    {
-                        cleanupAndExit();
-                    }
-                    if (tester == 400)
-                    {
-                        timer = readConfigTimer();
-                    }
-                }
-
-                /* Put the parameters into a PCB and store it in the list of processes. */
-                if (sscanf( inputbuffer, "%s %d %d", name, &lifetime, &runningTime) == 3)
-                {
-                    /* We have all the input that is required. */
-
-                    // Allocate memory for PCB
-                    pcb = (pcb_t *) malloc( sizeof( pcb_t ) );
-                    if (pcb != NULL)
-                    {
-                        strncpy( pcb->name, name, NAME_MAX - 1 );
-                        pcb->name[NAME_MAX] = '\0'; /* Make sure that it is null-terminated. */
-                        pcb->lifetime = lifetime;
-                        pcb->runningTime = runningTime;
-                        pcb->time_in_state = 0;
-
-                        //Show that process has been read and stored
-                        printf ("Read and stored process %s with lifetime %d and running time of %d\n", pcb->name, pcb->lifetime, pcb->runningTime);
-
-                        // Could not insert process into list
-                        if (List_add_tail( &processes, (void *)pcb ) == 0)
-                        {
-                            printf ("Error in inserting the process into the list.\n");
-                        }
-
-                        // Error, not enough memory to make PCB
-                    }
-                    else
-                    {
-                        printf( "Unable to allocate enough memory.\n");
-                    }
-
-                    // Incorrect number of parameters read in
-                }
-                else
-                {
-                    printf ("Incorrect number of parameters read.\n");
-                }
-
-                // No paramters read in
-            }
-            else
-            {
-                printf ("Nothing read in.\n");
-            }
-        }
-
+        printf ("Unable to install handler\n");
+        return_code = 1;
     }
     else
     {
-        printf ("Unable to initialize the list of processes.\n");
-        error_code = 1;
+        /* Start the timer and then wait! */
+        alarm( timer );
     }
 
-    // End of program
-    return error_code;
+    return return_code;
+}
+
+/* Updates config timer */
+int
+updateConfigTimer()
+{
+    timer = readConfigTimer();
+
+    return 0;
 }
 
