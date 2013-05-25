@@ -6,7 +6,7 @@
 #include "list.h"
 #include "parse.h"
 
-// Global variables for timer and queues
+/* Global variables for timer and queues */
 int timer = 0;
 List_t processes;
 List_t running;
@@ -29,6 +29,7 @@ main( int argc, char **argv )
     /* Initialize my data structures. */
     if (List_init( &processes ) && List_init( &running ) && List_init( &blocked ))
     {
+        /* Set up and initialization */
 
         // Initialize timer value
         timer = readConfigTimer();
@@ -39,6 +40,8 @@ main( int argc, char **argv )
         setUpBlocker();
         setUpConfigUpdater();
         setUpStateLister();
+
+        /* End set up */
 
         /* This creates an infinite loop from which you will need to do a
            ^C to stop the program.  This may not be the most elegant solution
@@ -123,8 +126,10 @@ readyState()
        there is no running process */
     if (processes.head != NULL && running.head == NULL)
     {
-        // Remove from ready queue
+        // Create pcb_t pointer for process and state transitions
         pcb_t *process;
+
+        // Remove from ready queue
         List_remove_head(&processes, (void *)&process);
 
         // Add to running queue
@@ -158,8 +163,10 @@ runningState()
     /* Call move code if there is something at the head of the running queue */
     if (running.head != NULL)
     {
-        // Get head of running processes
+        // Create pcb_t pointer for process and state transitions
         pcb_t *process;
+
+        // Get head of running processes
         List_head_info(&running, (void *)&process);
 
         // Send to Exit queue and deallocate when lifetime is 0 or running time is set to 0
@@ -209,8 +216,8 @@ runningState()
     }
 }
 
-/* Checks if anything is in blocked state and increases head timer until it hits
-   5, then removes it from blocked state and adds to ready queue */
+/* Checks if anything is in blocked state and increases time in head timer until
+   it hits 5, then removes it from blocked state and adds to ready queue */
 void
 blockedState()
 {
@@ -223,8 +230,10 @@ blockedState()
         // Processe has been in blocked state for 5 time units
         if (time_at_head == 5)
         {
-            // Remove from blocked queue
+            // Create pcb_t pointer for process and state transitions
             pcb_t *process;
+
+            // Remove from blocked queue
             List_remove_head(&blocked, (void *)&process);
 
             // Add to ready queue tail
@@ -280,8 +289,10 @@ moveToBlockedState()
        state */
     if (running.head != NULL)
     {
-        // Remove from running queue
+        // Create pcb_t pointer for process and state transitions
         pcb_t *process;
+
+        // Remove from running queue
         List_remove_head(&running, (void *)&process);
 
         // Add to blocked queue
@@ -293,10 +304,6 @@ moveToBlockedState()
         // Reset timer
         process->time_in_state = 0;
     }
-    else
-    {
-        // Nothing in running queue so nothing blocked
-    }
 }
 
 /* This frees up all of the list nodes and the node data */
@@ -304,17 +311,20 @@ void
 cleanupAndExit()
 {
     printf("\nFreeing up memory\n");
+
     /* Free up lists (modified List_destroy function to remove pcb_t data as well
        as node itself) */
     List_destroy(&processes);
     List_destroy(&running);
     List_destroy(&blocked);
-    printf("Exiting program...\n");
+
     // Exit program
+    printf("Exiting program...\n");
     exit(0);
 }
 
-/* Set up SIGUSR1 to print the state of the queues, ready, running and blocked */
+/* Set up SIGUSR1 intterupt handler to print the state of the queues,
+   ready, running and blocked */
 int
 setUpStateLister()
 {
@@ -329,7 +339,7 @@ setUpStateLister()
     return return_code;
 }
 
-/* Set up SIGUSR2 to block the running process  */
+/* Set up SIGUSR2 intterupt handler to block the running process  */
 int
 setUpBlocker()
 {
@@ -344,7 +354,8 @@ setUpBlocker()
     return return_code;
 }
 
-/* Set up SIGHUP to reread the config file and update the alarm timer */
+/* Set up SIGHUP intterupt handler
+   to reread the config file and update the alarm timer */
 int
 setUpConfigUpdater()
 {
@@ -358,7 +369,7 @@ setUpConfigUpdater()
 
     return return_code;
 }
-/* Set up SIGINT */
+/* Set up SIGINT intterupt handler */
 int
 setUpExit()
 {
@@ -382,21 +393,27 @@ setUpExit()
 void
 printQueue(List_t *list, char *name)
 {
+    // Create current node and last node pointers
     pcb_t *currentNode = NULL;
     pcb_t *lastNode = NULL;
 
+    // Print name of queue at top
     printf("%s queue:\n", name);
 
-    // If the head is null
+    // If the head is not null
     if ((list != NULL) && (list->head != NULL))
     {
+        // Get the head node of the list
         List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        // Loop through the list until null
         while (currentNode != NULL)
         {
-            printf("\t%s %d %d\n", currentNode->name, currentNode->lifetime, currentNode->time_in_state);
+            // Print out current node info, and get next node in list
+            printf("\t%s %d\n", currentNode->name, currentNode->lifetime);
             List_next_node(list, (void *)&lastNode, (void *)&currentNode);
         }
     }
+    // Print empty if nothing in list
     else
     {
         printf("\tEmpty");
@@ -424,15 +441,19 @@ displayQueueInfo()
 void
 updateQueueTime(List_t *list)
 {
+    // Create current node and last node pointers
     pcb_t *currentNode = NULL;
     pcb_t *lastNode = NULL;
 
-    // If the head is null
+    // If the head is not null
     if ((list != NULL) && (list->head != NULL))
     {
+        // Get head node
         List_next_node(list, (void *)&lastNode, (void *)&currentNode);
+        // Loop while node is not null
         while (currentNode != NULL)
         {
+            // Increase the time the node was in its current state
             currentNode->time_in_state++;
             List_next_node(list, (void *)&lastNode, (void *)&currentNode);
         }
@@ -455,7 +476,7 @@ readConfigTimer()
     // Open file
     inFile = fopen("config.txt", "r");
 
-    // Check that file exits
+    // Check that file exits, return 0 if not
     if (inFile == NULL)
     {
         printf("Error: File not found\n");
@@ -469,6 +490,7 @@ readConfigTimer()
     // Close the file
     fclose(inFile);
 
+    // Return the timer value
     return unitOfTime;
 }
 
@@ -478,6 +500,7 @@ setUpAlarm(int timer)
 {
     int return_code = 0;
 
+    // Set up intterupt handler
     if (signal( SIGALRM, stateTransitions ) == SIG_ERR)
     {
         printf ("Unable to install handler\n");
@@ -492,12 +515,11 @@ setUpAlarm(int timer)
     return return_code;
 }
 
-/* Updates config timer */
+/* Updates config timer when called by SIGHUP intterupt*/
 int
 updateConfigTimer()
 {
     timer = readConfigTimer();
-
     return 0;
 }
 
