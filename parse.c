@@ -273,16 +273,12 @@ cleanupAndExit()
 void
 stateTransitions( int the_signal )
 {
-    printf("\n\nStarclock: \n");
-    displayQueueInfo();
     // Move anything in running to ready if possible
     runningState();
     // Move anything in ready to running if possible
     readyState();
     // Move anything from blocked to ready if possible
     blockedState();
-    printf("\nEndclock: \n");
-    displayQueueInfo();
 
     // Reset timer
     alarm( timer );
